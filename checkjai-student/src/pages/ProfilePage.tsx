@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import TopBar from '../components/TopBar'
 import { getStudentId } from '../lib/auth'
 import profileImg from '../assets/images/รูปโปรไฟล์ข้อมูลส่วนตัว.png'
+import { API_URL } from '../lib/apiConfig'
 
 const fields = [
   { key: 'full_name', label: 'ชื่อผู้ใช้ :', type: 'text', autoComplete: 'name' },
@@ -23,7 +24,7 @@ export default function ProfilePage() {
       if (!studentId) return
 
       try {
-        const res = await fetch(`/api/auth/me?student_id=${studentId}`)
+        const res = await fetch(`${API_URL}/api/auth/me?student_id=${studentId}`)
         const json = await res.json()
 
         if (json.ok) {

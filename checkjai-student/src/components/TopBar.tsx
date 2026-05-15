@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useRef } from 'react'
 import { getStudentFullName, getStudentId, setStudentFullName, clearStudentAuth } from '../lib/auth'
 import logoImage from '../assets/images/โลโก้Checkjai-removebg-preview.png'
+import { API_URL } from '../lib/apiConfig'
 
 export default function TopBar() {
   const navigate = useNavigate()
@@ -16,7 +17,7 @@ export default function TopBar() {
       return
     }
     
-    fetch(`/api/auth/me?student_id=${studentId}`)
+    fetch(`${API_URL}/api/auth/me?student_id=${studentId}`)
       .then(res => res.json())
       .then(json => {
         if (json.ok && json.full_name) {

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import TopBar from '../components/TopBar'
 import { getStudentId } from '../lib/auth'
 import emptyImg from '../assets/images/รูปแสดงว่ายังไม่มีประวัติการทำแบบทดสอบ.png'
+import { API_URL } from '../lib/apiConfig'
 
 type HistoryItem = {
   id: string
@@ -24,7 +25,7 @@ export default function HistoryPage() {
 
     async function fetchHistory() {
       try {
-        const res = await fetch(`/api/history?student_id=${studentId}`)
+        const res = await fetch(`${API_URL}/api/history?student_id=${studentId}`)
         const json = await res.json()
         if (json.ok) {
           setHistory(json.history || [])
