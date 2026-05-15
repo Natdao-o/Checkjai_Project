@@ -7,7 +7,7 @@ import { calculateEqTotal } from './lib/eqScore.ts'
 import { calculateDass21, isDass21Complete } from './lib/dass21Score.ts'
 
 const app = express()
-const port = Number(process.env.API_PORT) || 3001
+const port = Number(process.env.PORT || process.env.API_PORT) || 3001
 
 const supabaseUrl = (
   process.env.SUPABASE_URL ??
@@ -108,21 +108,24 @@ app.use(
 app.use(express.json())
 
 app.get('/api/health', (_req, res) => {
-  const hasUrl = Boolean(supabaseUrl)
-  const hasAnon = Boolean(supabaseKey)
-  const hasServiceRole = serviceRoleKey.length > 0
+  const hasUrl = Boolean(supabaseUrl && supabaseUrl.startsWith('https://'))
+  const hasAnon = Boolean(supabaseKey && supabaseKey.length > 50)
+  const hasServiceRole = Boolean(serviceRoleKey && serviceRoleKey.length > 50)
+  
   res.json({
     ok: true,
     service: 'checkjai-api',
+    env: process.env.NODE_ENV || 'development',
     supabaseConfigured: hasUrl && hasAnon,
-    /** ควรเป็น true เมื่อ checkjai/.env มี SUPABASE_SERVICE_ROLE_KEY แล้วรีสตาร์ท API */
     adminSearchConfigured: hasUrl && hasServiceRole,
-    /** ใช้ดูว่าขาดอะไร (ไม่ส่งค่าคีย์จริง) */
-    checks: {
-      hasSupabaseUrl: hasUrl,
-      hasAnonKey: hasAnon,
-      hasServiceRoleKey: hasServiceRole,
-    },
+    diagnostics: {
+      url_valid: hasUrl,
+      anon_key_valid: hasAnon,
+      service_role_key_valid: hasServiceRole,
+      hint: !hasUrl || !hasAnon 
+        ? 'Please check Vercel Environment Variables: SUPABASE_URL, SUPABASE_ANON_KEY' 
+        : 'Supabase configuration looks good.'
+    }
   })
 })
 
@@ -793,8 +796,8 @@ app.get('/api/admin/dashboard/stats', async (req, res) => {
 // สำหรับ Vercel Serverless Functions
 export default app;
 
-// รันเฉพาะเมื่อไม่ได้อยู่บน Vercel (Local Development)
-if (process.env.NODE_ENV !== 'production') {
+// รันเฉพาะเมื่อไม่ได้อยู่บน Vercel (เช่น Local หรือ Render)
+if (process.env.NODE_ENV !== 'production' || process.env.RENDER) {
   app.listen(port, () => {
     console.log(`[checkjai-api] http://localhost:${port}`)
   })
