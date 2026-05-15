@@ -343,7 +343,7 @@ export default function AdminSearchPage() {
 
         {error ? <p className="aj-searchError">{error}</p> : null}
 
-        <div className="aj-searchTableWrap">
+        <div className="aj-searchTableWrap w-full overflow-x-auto">
           <table className="aj-searchTable">
             <thead>
               <tr>

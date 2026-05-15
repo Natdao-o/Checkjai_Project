@@ -128,12 +128,12 @@ export default function QuizQuestionPage() {
               </button>
             </article>
           ) : (
-            <article className="cj-quizQuestionCard">
+            <article className="cj-quizQuestionCard p-4 sm:p-6 md:p-[34px_28px_32px] w-full max-w-4xl mx-auto">
               <>
                   <p className="cj-quizProgress">
                     แบบประเมินความฉลาดทางอารมณ์ EQ ({index + 1}/{questions.length})
                   </p>
-                  <p className="cj-quizQuestionText">
+                  <p className="cj-quizQuestionText text-lg sm:text-xl md:text-[23px] font-semibold mb-6 md:mb-8 leading-snug md:leading-[1.5]">
                     ข้อ {index + 1}: {questions[index]}
                   </p>
 
@@ -142,7 +142,7 @@ export default function QuizQuestionPage() {
                       <button
                         key={choice}
                         type="button"
-                        className={`cj-quizChoiceBtn ${currentAnswer === choiceIndex ? 'is-selected' : ''}`}
+                        className={`cj-quizChoiceBtn w-full md:w-[min(360px,100%)] p-4 md:p-[10px_18px] text-base sm:text-lg md:text-[24px] transition-all duration-200 ${currentAnswer === choiceIndex ? 'is-selected ring-2 ring-pink-300' : 'hover:bg-pink-50'}`}
                         onClick={() => selectChoice(choiceIndex)}
                       >
                         {choice}

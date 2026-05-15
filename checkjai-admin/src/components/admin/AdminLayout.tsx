@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   adminFetch,
@@ -8,6 +9,8 @@ import {
 export default function AdminLayout() {
   const navigate = useNavigate()
   const displayName = sessionStorage.getItem(CHECKJAI_TEACHER_STORAGE_KEY) ?? ''
+
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   async function logout() {
     try {
@@ -20,11 +23,46 @@ export default function AdminLayout() {
   }
 
   return (
-    <div className="aj-dash">
-      <aside className="aj-dashSidebar" aria-label="เมนูผู้ดูแล">
+    <div className="aj-dash relative">
+      {/* Mobile Header (Visible only on small screens) */}
+      <div className="md:hidden flex items-center justify-between bg-[#0b1139] text-white px-4 py-3 sticky top-0 z-[60] shadow-md">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
+            <span className="text-[#0b1139] font-bold">CJ</span>
+          </div>
+          <span className="font-bold text-lg">Admin</span>
+        </div>
+        <button 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+          aria-label="Toggle menu"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {isMobileMenuOpen ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            )}
+          </svg>
+        </button>
+      </div>
+
+      {/* Overlay for mobile drawer */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 z-[50] md:hidden backdrop-blur-sm" 
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      <aside 
+        className={`aj-dashSidebar fixed md:relative inset-y-0 left-0 z-[55] md:z-auto transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out w-[280px] md:w-auto h-full overflow-y-auto`} 
+        aria-label="เมนูผู้ดูแล"
+      >
         <nav className="aj-dashNav">
           <NavLink
             to="/admin/dashboard"
+            onClick={() => setIsMobileMenuOpen(false)}
             className={({ isActive }) =>
               `aj-dashNavLink ${isActive ? 'is-active' : ''}`
             }
@@ -33,6 +71,7 @@ export default function AdminLayout() {
           </NavLink>
           <NavLink
             to="/admin/search"
+            onClick={() => setIsMobileMenuOpen(false)}
             className={({ isActive }) =>
               `aj-dashNavLink ${isActive ? 'is-active' : ''}`
             }
@@ -41,6 +80,7 @@ export default function AdminLayout() {
           </NavLink>
           <NavLink
             to="/admin/semester-settings"
+            onClick={() => setIsMobileMenuOpen(false)}
             className={({ isActive }) =>
               `aj-dashNavLink ${isActive ? 'is-active' : ''}`
             }
@@ -56,7 +96,7 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      <div className="aj-dashMain">
+      <div className="aj-dashMain min-w-0 p-4 sm:p-6 md:p-10">
         <Outlet />
       </div>
     </div>
