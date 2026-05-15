@@ -90,7 +90,7 @@ function getActiveTermKey(): string {
 }
 app.use(
   cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174'],
+    origin: true, // หรือระบุ ['http://localhost:5173', 'http://localhost:5174', /\.vercel\.app$/]
     credentials: true,
   }),
 )
