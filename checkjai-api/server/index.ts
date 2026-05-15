@@ -18,9 +18,20 @@ const supabaseKey = (
   process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY ?? ''
 ).trim()
 
+console.log('[checkjai-api] Supabase URL configured:', !!supabaseUrl);
+console.log('[checkjai-api] Supabase Anon Key configured:', !!supabaseKey);
+
+if (!supabaseUrl || !supabaseKey) {
+  console.warn('[checkjai-api] WARNING: Supabase URL or Anon Key is missing! Check your Vercel Environment Variables.');
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()
+console.log('[checkjai-api] Supabase Service Role Key configured:', !!serviceRoleKey);
+if (!serviceRoleKey) {
+  console.warn('[checkjai-api] WARNING: SUPABASE_SERVICE_ROLE_KEY is missing! Admin functions may fail.');
+}
 const supabaseService =
   serviceRoleKey && supabaseUrl
     ? createClient(supabaseUrl, serviceRoleKey, {
