@@ -88,7 +88,7 @@ export default function AdminSearchPage() {
     p.set('sort', sort === 'id' ? 'student_id' : sort)
     p.set('order', order)
     return p.toString()
-  }, [studentQ, faculty, major, yearLevel, sort, order])
+  }, [studentQ, faculty, major, yearLevel, status, page, limit, sort, order])
 
   const runSearch = useCallback(async () => {
     setError(null)
@@ -162,6 +162,7 @@ export default function AdminSearchPage() {
     flushSync(() => {
       setStudentQ('')
       setFaculty('')
+      setMajor('')
       setYearLevel('')
       setStatus('')
       setPage(1)
@@ -239,8 +240,8 @@ export default function AdminSearchPage() {
             <input
               type="text"
               value={studentQ}
-              onChange={(e) => setStudentQ(e.target.value)}
-              placeholder="ค้นหารหัสหรือชื่อ"
+              onChange={(e) => setStudentQ(e.target.value.replace(/\D/g, ''))}
+              placeholder="ค้นหารหัส"
               className="aj-searchInput"
             />
           </label>
