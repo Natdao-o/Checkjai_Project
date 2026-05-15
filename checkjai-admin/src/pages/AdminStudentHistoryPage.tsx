@@ -1,0 +1,288 @@
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { adminFetch, clearTeacherSession, getTeacherToken } from '../lib/teacherSession'
+import type { StudentHistoryRow, StudentProfileLite } from '../types/assessmentAdmin'
+
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from 'recharts'
+
+type ApiResponse = {
+  ok?: boolean
+  message?: string
+  student?: StudentProfileLite
+  history?: StudentHistoryRow[]
+}
+
+function formatDateTh(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('th-TH', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+
+type RecordMetrics = {
+  id: string
+  dateLabel: string
+  mentalWellbeing: number
+  eqPercent: number
+  overall: number
+}
+
+function clamp01To100(v: number): number {
+  return Math.max(0, Math.min(100, Math.round(v)))
+}
+
+function computeMetrics(record: StudentHistoryRow): RecordMetrics {
+  const eqPercent = clamp01To100(((record.eq_total_score ?? 0) / 208) * 100)
+
+  const d = record.dass_depression?.doubled ?? 0
+  const a = record.dass_anxiety?.doubled ?? 0
+  const s = record.dass_stress?.doubled ?? 0
+  const dassAvg = (d + a + s) / 3
+  // DASS ยิ่งสูงยิ่งเครียด/เสี่ยงมาก จึงกลับแกนให้ "สุขภาวะ" มากขึ้น = คะแนนสูงขึ้น
+  const mentalWellbeing = clamp01To100(100 - (dassAvg / 42) * 100)
+
+  const overall = clamp01To100((mentalWellbeing + eqPercent) / 2)
+  return {
+    id: record.id,
+    dateLabel: formatDateTh(record.created_at),
+    mentalWellbeing,
+    eqPercent,
+    overall,
+  }
+}
+
+export default function AdminStudentHistoryPage() {
+  const navigate = useNavigate()
+  const { studentId = '' } = useParams()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [student, setStudent] = useState<StudentProfileLite | null>(null)
+  const [history, setHistory] = useState<StudentHistoryRow[]>([])
+  const [metrics, setMetrics] = useState<RecordMetrics[]>([])
+
+  useEffect(() => {
+    if (!getTeacherToken()) {
+      navigate('/admin/login', { replace: true })
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await adminFetch(`/api/admin/students/${encodeURIComponent(studentId)}/history`)
+        const json = (await res.json()) as ApiResponse
+        if (res.status === 401) {
+          clearTeacherSession()
+          navigate('/admin/login', { replace: true })
+          return
+        }
+        if (!res.ok || !json.ok) {
+          setError(json.message ?? 'โหลดประวัติไม่สำเร็จ')
+          return
+        }
+        if (cancelled) return
+        setStudent(json.student ?? null)
+        const rows = json.history ?? []
+        setHistory(rows)
+        setMetrics(rows.map((r) => computeMetrics(r)))
+      } catch {
+        if (!cancelled) setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [navigate, studentId])
+
+  return (
+    <div className="aj-historyPage aj-admin-theme">
+      <header className="aj-searchHeader">
+        <h1 className="aj-searchTitle">Student History</h1>
+        <p className="aj-searchCrumb">
+          <button type="button" className="aj-searchCrumbLink" onClick={() => navigate('/admin/search')}>
+            Search
+          </button>
+          {' > History'}
+        </p>
+      </header>
+
+      {error ? <p className="aj-searchBanner">{error}</p> : null}
+
+      <section className="aj-historyProfile aj-searchPanel">
+        <h2 className="aj-historyName">
+          {student?.full_name || studentId}
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', fontSize: '14px', color: '#64748b' }}>
+          <p>รหัสนักศึกษา : <span style={{ color: '#1e293b', fontWeight: 600 }}>{student?.student_id || studentId}</span></p>
+          <p>คณะ : <span style={{ color: '#1e293b', fontWeight: 600 }}>{student?.faculty?.trim() || '-'}</span></p>
+          <p>ชั้นปี : <span style={{ color: '#1e293b', fontWeight: 600 }}>{student?.year_level != null ? student.year_level : '-'}</span></p>
+          <p>สาขา : <span style={{ color: '#1e293b', fontWeight: 600 }}>{student?.major?.trim() || '-'}</span></p>
+        </div>
+      </section>
+
+      <section className="aj-summarySection aj-searchPanel" style={{ marginBottom: '24px' }}>
+        <h2 className="aj-summaryHead" style={{ border: 'none', marginBottom: '20px' }}>แนวโน้มสุขภาพจิตใจ (Mental Wellbeing Trend)</h2>
+        <div style={{ height: '300px', width: '100%' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={[...metrics].reverse() /* Oldest to Newest */}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="dateLabel" fontSize={12} />
+              <YAxis domain={[0, 100]} fontSize={12} />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="mentalWellbeing" name="สุขภาวะทางจิต" stroke="#3b82f6" strokeWidth={3} dot={{ r: 6 }} />
+              <Line type="monotone" dataKey="eqPercent" name="ความฉลาดทางอารมณ์" stroke="#10b981" strokeWidth={3} dot={{ r: 6 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <section className="aj-summarySection aj-searchPanel">
+        <h2 className="aj-summaryHead" style={{ border: 'none', marginBottom: '20px' }}>สรุปภาพรวมล่าสุด (Radar Summary)</h2>
+        {loading ? (
+          <p className="aj-searchTdMuted">กำลังคำนวณกราฟ...</p>
+        ) : metrics.length === 0 ? (
+          <p className="aj-searchTdMuted">ยังไม่มีข้อมูลสำหรับแสดงกราฟ</p>
+        ) : (
+          <div className="aj-summaryGraphWrap">
+            <svg
+              viewBox="0 0 520 340"
+              className="aj-summaryGraphSvg"
+              aria-label="กราฟสรุปจากทุก record"
+            >
+              {(() => {
+                const cx = 260
+                const cy = 175
+                const radius = 118
+                const axes = [
+                  { key: 'mentalWellbeing', angle: -Math.PI / 2 },
+                  { key: 'eqPercent', angle: (Math.PI * 1) / 6 },
+                  { key: 'overall', angle: (Math.PI * 5) / 6 },
+                ] as const
+
+                const ringPoints = (ratio: number) =>
+                  axes
+                    .map((ax) => {
+                      const x = cx + Math.cos(ax.angle) * radius * ratio
+                      const y = cy + Math.sin(ax.angle) * radius * ratio
+                      return `${x},${y}`
+                    })
+                    .join(' ')
+
+                const colors = ['#b072d7', '#57b4ea', '#f2a56f', '#6fd3be', '#f38ac5']
+
+                return (
+                  <g>
+                    {[0.2, 0.4, 0.6, 0.8, 1].map((r) => (
+                      <polygon
+                        key={r}
+                        points={ringPoints(r)}
+                        fill="none"
+                        stroke="rgba(11,17,57,0.16)"
+                        strokeWidth="1"
+                      />
+                    ))}
+                    {axes.map((ax, idx) => {
+                      const x = cx + Math.cos(ax.angle) * radius
+                      const y = cy + Math.sin(ax.angle) * radius
+                      return (
+                        <line
+                          key={`axis-${idx}`}
+                          x1={cx}
+                          y1={cy}
+                          x2={x}
+                          y2={y}
+                          stroke="rgba(11,17,57,0.2)"
+                          strokeWidth="1"
+                        />
+                      )
+                    })}
+
+                    {metrics.map((m, idx) => {
+                      const points = axes
+                        .map((ax) => {
+                          const value = m[ax.key]
+                          const ratio = value / 100
+                          const x = cx + Math.cos(ax.angle) * radius * ratio
+                          const y = cy + Math.sin(ax.angle) * radius * ratio
+                          return `${x},${y}`
+                        })
+                        .join(' ')
+                      const color = colors[idx % colors.length]
+                      return (
+                        <polygon
+                          key={m.id}
+                          points={points}
+                          fill={color}
+                          fillOpacity={0.28}
+                          stroke={color}
+                          strokeWidth="1.5"
+                        />
+                      )
+                    })}
+
+                    <text x={260} y={24} className="aj-summaryAxisLabel aj-summaryAxisLabel--top">
+                      แบบทดสอบสุขภาพจิตใจ
+                    </text>
+                    <text x={388} y={206} className="aj-summaryAxisLabel aj-summaryAxisLabel--right">
+                      แบบทดสอบความฉลาดทางอารมณ์
+                    </text>
+                    <text x={115} y={206} className="aj-summaryAxisLabel aj-summaryAxisLabel--left">
+                      สรุปภาพรวม
+                    </text>
+                  </g>
+                )
+              })()}
+            </svg>
+
+            <div className="aj-summaryLegend">
+              {metrics.map((m, idx) => (
+                <p key={m.id} className="aj-summaryLegendItem">
+                  <span className={`aj-summaryLegendDot c-${idx % 5}`} />
+                  {m.dateLabel} — สุขภาวะ {m.mentalWellbeing} / EQ {m.eqPercent} / รวม {m.overall}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="aj-searchPanel" style={{ marginTop: '24px' }}>
+        <h2 className="aj-historyHead" style={{ border: 'none', marginBottom: '16px' }}>ประวัติการทำแบบทดสอบ</h2>
+        {loading ? (
+          <p className="aj-searchTdMuted">กำลังโหลด...</p>
+        ) : history.length === 0 ? (
+          <p className="aj-searchTdMuted">ยังไม่มีประวัติการส่งแบบทดสอบ</p>
+        ) : (
+          <div className="aj-historyList">
+            {history.map((h) => {
+              const to = `/admin/search/${encodeURIComponent(studentId)}/history/${h.id}`
+              return (
+                <button
+                  key={h.id}
+                  type="button"
+                  className="aj-historyItem aj-historyItemBtn"
+                  onClick={() => navigate(to)}
+                >
+                  <p className="aj-historyItemTitle">● แบบทดสอบ</p>
+                  <p className="aj-historyItemLine">แบบทดสอบความฉลาดทางอารมณ์ EQ</p>
+                  <p className="aj-historyItemLine">แบบทดสอบสุขภาพจิต DASS-21</p>
+                  <p className="aj-historyItemDate">{formatDateTh(h.created_at)}</p>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
