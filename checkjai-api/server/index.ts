@@ -779,6 +779,12 @@ app.get('/api/admin/dashboard/stats', async (req, res) => {
   }
 })
 
-app.listen(port, () => {
-  console.log(`[checkjai-api] http://localhost:${port}`)
-})
+// สำหรับ Vercel Serverless Functions
+export default app;
+
+// รันเฉพาะเมื่อไม่ได้อยู่บน Vercel (Local Development)
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(port, () => {
+    console.log(`[checkjai-api] http://localhost:${port}`)
+  })
+}
