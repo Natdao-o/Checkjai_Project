@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --cj-bg: #fce7f3;
   --cj-bg2: #f5d7e2;
