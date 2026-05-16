@@ -6,7 +6,7 @@ import {
   getTeacherToken,
   clearTeacherSession,
 } from '../lib/teacherSession'
-import { downloadAssessmentsCsv } from '../utils/exportAssessmentsCsv'
+import { downloadAssessmentsExcel } from '../utils/exportAssessmentsExcel'
 import type { AssessmentListRow } from '../types/assessmentAdmin'
 
 
@@ -218,18 +218,42 @@ export default function AdminSearchPage() {
     navigate(`/admin/search/${encodeURIComponent(sid)}/history`)
   }
 
+  async function handleExportSelected() {
+    if (selected.size === 0) return
+    setExporting(true)
+    try {
+      const qs = new URLSearchParams()
+      qs.set('all', 'true')
+      qs.set('full_history', 'true')
+      qs.set('student_ids', Array.from(selected).join(','))
+      
+      const res = await adminFetch(`/api/admin/assessments?${qs.toString()}`)
+      const json = await res.json()
+      if (res.ok && json.ok) {
+        downloadAssessmentsExcel(json.rows ?? [], new Set())
+      } else {
+        alert(json.message ?? 'Export ไม่สำเร็จ')
+      }
+    } catch {
+      alert('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   async function handleExportAll() {
     setExporting(true)
     try {
       const qs = buildQuery()
-      // Force all=true and remove page/limit if needed, though API now handles all=true
+      // Force all=true and full_history=true
       const exportQs = new URLSearchParams(qs)
       exportQs.set('all', 'true')
+      exportQs.set('full_history', 'true')
       
       const res = await adminFetch(`/api/admin/assessments?${exportQs.toString()}`)
       const json = await res.json()
       if (res.ok && json.ok) {
-        downloadAssessmentsCsv(json.rows ?? [], new Set())
+        downloadAssessmentsExcel(json.rows ?? [], new Set())
       } else {
         alert(json.message ?? 'Export ไม่สำเร็จ')
       }
@@ -357,11 +381,11 @@ export default function AdminSearchPage() {
           <button
             type="button"
             className="aj-searchBtnExport"
-            onClick={() => downloadAssessmentsCsv(rows, selected)}
-            disabled={rows.length === 0 || selected.size === 0}
+            onClick={handleExportSelected}
+            disabled={rows.length === 0 || selected.size === 0 || exporting}
             style={{ marginRight: '8px' }}
           >
-            Export รายการที่เลือก ({selected.size})
+            {exporting ? '...' : `Export รายการที่เลือก (${selected.size})`}
           </button>
           <button
             type="button"

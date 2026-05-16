@@ -220,7 +220,7 @@ app.get('/api/history', async (req, res) => {
   const client = serviceRoleKey ? supabaseService : supabase
   const { data, error } = await client
     .from('assessment_submissions')
-    .select('id, created_at, eq_total_score')
+    .select('id, created_at, eq_total_score, is_confirmed')
     .eq('student_id', sid)
     .order('created_at', { ascending: false })
 
@@ -312,7 +312,17 @@ app.get('/api/admin/meta', async (req, res) => {
       ),
     ].sort((a, b) => a - b)
 
-    return res.json({ ok: true, faculties, majors, years })
+    const facultyMajorMap: Record<string, string[]> = {}
+    rows.forEach((r) => {
+      if (r.faculty && r.major) {
+        if (!facultyMajorMap[r.faculty]) facultyMajorMap[r.faculty] = []
+        if (!facultyMajorMap[r.faculty].includes(r.major)) {
+          facultyMajorMap[r.faculty].push(r.major)
+        }
+      }
+    })
+
+    return res.json({ ok: true, faculties, majors, years, facultyMajorMap })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     return res.status(500).json({ ok: false, message: msg })
@@ -332,30 +342,70 @@ app.get('/api/admin/assessments', async (req, res) => {
   if (!svc) return
 
   try {
-    let q = svc.from('v_admin_student_directory').select('*', { count: 'exact' })
+    const isAll = String(req.query.all) === 'true'
+    const fullHistory = String(req.query.full_history) === 'true'
+    const limit = Number(req.query.limit) || 50
+    const page = Number(req.query.page) || 1
 
     const qStudent = String(req.query.q ?? req.query.student_id ?? '').trim()
-    if (qStudent) {
-      const e = escapeIlike(qStudent)
-      q = q.or(
-        `student_id.ilike.%${e}%,full_name.ilike.%${e}%`,
-      )
-    }
-
     const faculty = String(req.query.faculty ?? '').trim()
-    if (faculty) q = q.eq('faculty', faculty)
-
     const major = String(req.query.major ?? '').trim()
-    if (major) q = q.eq('major', major)
-
     const yearLevel = req.query.year_level
-    if (yearLevel !== undefined && yearLevel !== '') {
-      const y = Number(yearLevel)
-      if (Number.isFinite(y)) q = q.eq('year_level', y)
-    }
-
     const status = String(req.query.status ?? '').trim()
-    if (status) q = q.eq('status', status)
+
+    const studentIds = String(req.query.student_ids || '').split(',').filter(Boolean)
+
+    let q;
+    if (fullHistory) {
+      // เพื่อให้ผลการค้นหาตรงกัน: 
+      // 1. ค้นหา ID ของนักศึกษาที่ตรงตามเงื่อนไขทั้งหมดก่อน (รวมถึงชื่อและสถานะ)
+      let idQuery = svc.from('v_admin_student_directory').select('student_id')
+      
+      // ถ้ามีการระบุ ID ที่เลือกมาโดยเฉพาะ (Export Selected) ให้กรองตามนั้นก่อน
+      if (studentIds.length > 0) {
+        idQuery = idQuery.in('student_id', studentIds)
+      }
+
+      if (qStudent) {
+        const e = escapeIlike(qStudent)
+        idQuery = idQuery.or(`student_id.ilike.%${e}%,full_name.ilike.%${e}%`)
+      }
+      if (faculty) idQuery = idQuery.eq('faculty', faculty)
+      if (major) idQuery = idQuery.eq('major', major)
+      if (yearLevel !== undefined && yearLevel !== '') {
+        const y = Number(yearLevel)
+        if (Number.isFinite(y)) idQuery = idQuery.eq('year_level', y)
+      }
+      if (status) idQuery = idQuery.eq('status', status)
+      
+      const { data: matchedStudents } = await idQuery
+      const matchedIds = (matchedStudents ?? []).map(s => s.student_id)
+      
+      if (matchedIds.length === 0) {
+        return res.json({ ok: true, rows: [], total: 0, page, limit })
+      }
+
+      // 2. ใช้ ID ที่ได้มาดึงประวัติทั้งหมดจาก v_dashboard_submissions
+      q = svc.from('v_dashboard_submissions').select('*', { count: 'exact' }).in('student_id', matchedIds)
+    } else {
+      q = svc.from('v_admin_student_directory').select('*', { count: 'exact' })
+      
+      if (studentIds.length > 0) {
+        q = q.in('student_id', studentIds)
+      }
+      
+      if (qStudent) {
+        const e = escapeIlike(qStudent)
+        q = q.or(`student_id.ilike.%${e}%,full_name.ilike.%${e}%`)
+      }
+      if (faculty) q = q.eq('faculty', faculty)
+      if (major) q = q.eq('major', major)
+      if (yearLevel !== undefined && yearLevel !== '') {
+        const y = Number(yearLevel)
+        if (Number.isFinite(y)) q = q.eq('year_level', y)
+      }
+      if (status) q = q.eq('status', status)
+    }
 
     const sortKey = String(req.query.sort || 'student_id')
     const asc = String(req.query.order || 'asc') === 'asc'
@@ -372,10 +422,6 @@ app.get('/api/admin/assessments', async (req, res) => {
                 ? 'status'
                 : 'student_id'
 
-    // Pagination
-    const isAll = String(req.query.all) === 'true'
-    const limit = Number(req.query.limit) || 50
-    const page = Number(req.query.page) || 1
     const from = (page - 1) * limit
     const to = from + limit - 1
 
@@ -389,15 +435,41 @@ app.get('/api/admin/assessments', async (req, res) => {
     if (error) {
       return res.status(500).json({
         ok: false,
-        message: 'ดึงข้อมูลนักศึกษาไม่สำเร็จ',
+        message: 'ดึงข้อมูลไม่สำเร็จ',
         details: error.message,
         code: error.code,
       })
     }
 
+    let rows = data ?? []
+    
+    // ถ้าเป็นโหมดประวัติทั้งหมด และดึงข้อมูลสำเร็จ ให้ไปดึงชื่อนักศึกษามาแปะเพิ่ม
+    if (fullHistory && rows.length > 0) {
+      const uniqueIds = [...new Set(rows.map((r: any) => r.student_id))]
+      const { data: profiles } = await svc
+        .from('student_profiles')
+        .select('student_id, full_name')
+        .in('student_id', uniqueIds)
+      
+      const nameMap: Record<string, string> = {}
+      profiles?.forEach(p => {
+        nameMap[p.student_id] = p.full_name || p.student_id
+      })
+
+      rows = rows.map((r: any) => ({
+        ...r,
+        full_name: nameMap[r.student_id] || r.student_id,
+        latest_depression_score: r.d_score,
+        latest_anxiety_score: r.a_score,
+        latest_stress_score: r.s_score,
+        latest_submission_at: r.created_at,
+        status: 'Submitted'
+      }))
+    }
+
     return res.json({ 
       ok: true, 
-      rows: data ?? [], 
+      rows, 
       total: count ?? 0,
       page,
       limit,
@@ -530,8 +602,51 @@ app.post('/api/assessment/submit', async (req, res) => {
     return res.status(400).json({ ok: false, message: 'ไม่พบรหัสนักศึกษา' })
   }
 
-  // ใช้ service role เมื่อมีเพื่อหลีกเลี่ยง RLS และเรียก RPC เดียวเพื่อลด latency
+  // ใช้ service role เมื่อมีเพื่อหลีกเลี่ยง RLS
   const writer = supabaseService ?? supabase
+
+  // 1. ตรวจสอบว่ามีประวัติของเทอมนี้อยู่แล้วหรือไม่
+  const { data: existing } = await writer
+    .from('assessment_submissions')
+    .select('id, is_confirmed')
+    .eq('student_id', student_id)
+    .eq('term_key', termKey)
+    .maybeSingle()
+
+  if (existing) {
+    // ถ้ามีอยู่แล้วและยืนยันผลไปแล้ว ห้ามแก้
+    if (existing.is_confirmed) {
+      return res.status(409).json({
+        ok: false,
+        message: `เทอม ${termKey} ถูกยืนยันการเก็บข้อมูลแล้ว ไม่สามารถเขียนทับได้`,
+      })
+    }
+    
+    // ถ้ายังไม่ยืนยัน ให้ทำการ "แทนที่" (Update) ข้อมูลเดิม
+    const { error: updateErr } = await writer
+      .from('assessment_submissions')
+      .update({
+        eq_answers: eq_answers as number[],
+        eq_total_score: eqResult.total,
+        dass_answers: dass_answers as number[],
+        dass_depression: dr.depression,
+        dass_anxiety: dr.anxiety,
+        dass_stress: dr.stress,
+        created_at: new Date().toISOString() // อัปเดตเวลาเป็นล่าสุด
+      })
+      .eq('id', existing.id)
+
+    if (updateErr) {
+      return res.status(500).json({ 
+        ok: false, 
+        message: 'บันทึกข้อมูลใหม่แทนที่ของเดิมไม่สำเร็จ', 
+        details: updateErr.message 
+      })
+    }
+    return res.json({ ok: true, term_key: termKey, submission_id: existing.id })
+  }
+
+  // 2. ถ้ายังไม่มีประวัติในเทอมนี้ ให้สร้างใหม่ (ใช้ RPC เดิม)
   const { data, error } = await writer.rpc('save_assessment_submission', {
     p_student_id: student_id,
     p_term_key: termKey,

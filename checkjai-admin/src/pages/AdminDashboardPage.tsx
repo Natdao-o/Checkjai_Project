@@ -34,10 +34,13 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [semesters, setSemesters] = useState<Semester[]>([])
   const [faculties, setFaculties] = useState<string[]>([])
+  const [facultyMajorMap, setFacultyMajorMap] = useState<Record<string, string[]>>({})
   
   const [loading, setLoading] = useState(false)
   const [semesterId, setSemesterId] = useState('')
   const [faculty, setFaculty] = useState('')
+  const [major, setMajor] = useState('')
+  const [majors, setMajors] = useState<string[]>([])
 
   const loadMeta = async () => {
     try {
@@ -53,7 +56,11 @@ export default function AdminDashboardPage() {
           setSemesterId(sJson.semesters[0].id)
         }
       }
-      if (mJson.ok) setFaculties(mJson.faculties)
+      if (mJson.ok) {
+        setFaculties(mJson.faculties || [])
+        setMajors(mJson.majors || [])
+        setFacultyMajorMap(mJson.facultyMajorMap || {})
+      }
     } catch (e) {}
   }
 
@@ -63,6 +70,7 @@ export default function AdminDashboardPage() {
       const qs = new URLSearchParams()
       if (semesterId) qs.set('semester_id', semesterId)
       if (faculty) qs.set('faculty', faculty)
+      if (major) qs.set('major', major)
 
       const res = await adminFetch(`/api/admin/dashboard/stats?${qs.toString()}`)
       const json = await res.json()
@@ -89,7 +97,7 @@ export default function AdminDashboardPage() {
     if (semesterId) {
       void loadStats()
     }
-  }, [navigate, semesterId, faculty])
+  }, [navigate, semesterId, faculty, major])
 
   return (
     <div className="aj-searchPage aj-admin-theme">
@@ -111,10 +119,37 @@ export default function AdminDashboardPage() {
             </select>
           </label>
           <label className="aj-searchField">
-            <span>คณะ / วิทยาลัย</span>
-            <select value={faculty} onChange={(e) => setFaculty(e.target.value)} className="aj-searchSelect">
-              <option value="">แสดงทั้งหมด</option>
-              {faculties.map(f => <option key={f} value={f}>{f}</option>)}
+            <span>คณะ</span>
+            <select
+              value={faculty}
+              onChange={(e) => {
+                setFaculty(e.target.value)
+                setMajor('') // Reset major when faculty changes
+              }}
+              className="aj-searchSelect"
+            >
+              <option value="">ทั้งหมด</option>
+              {faculties.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="aj-searchField">
+            <span>สาขาวิชา</span>
+            <select
+              value={major}
+              onChange={(e) => setMajor(e.target.value)}
+              className="aj-searchSelect"
+            >
+              <option value="">ทั้งหมด</option>
+              {(faculty ? (facultyMajorMap[faculty] || []) : majors).map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
             </select>
           </label>
         </div>

@@ -9,6 +9,7 @@ type HistoryItem = {
   id: string
   created_at: string
   eq_total_score?: number
+  is_confirmed?: boolean
 }
 
 export default function HistoryPage() {
@@ -70,9 +71,13 @@ export default function HistoryPage() {
               {history.map((item) => (
                 <div
                   key={item.id}
-                  className="bg-white rounded-2xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-[#fce7f3] flex items-center gap-4 transition-all hover:shadow-md"
+                  className={`rounded-2xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border flex items-center gap-4 transition-all hover:shadow-md ${
+                    item.is_confirmed 
+                      ? 'bg-white border-[#fce7f3]' 
+                      : 'bg-[#fffde7] border-[#fde68a]'
+                  }`}
                 >
-                  <div className="w-3 h-3 bg-[#ff4d4d] rounded-full flex-shrink-0"></div>
+                  <div className={`w-3 h-3 rounded-full flex-shrink-0 ${item.is_confirmed ? 'bg-[#ff4d4d]' : 'bg-yellow-400'}`}></div>
                   <div className="flex-grow">
                     <h3 className="font-bold text-[#df4a91] text-lg mb-1">ทำแบบทดสอบสำเร็จ</h3>
                     <p className="text-[#5b2b3b]/70 text-sm md:text-base">
