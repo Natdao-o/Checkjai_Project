@@ -38,6 +38,7 @@ export default function AdminSearchPage() {
 
   const [faculties, setFaculties] = useState<string[]>([])
   const [majors, setMajors] = useState<string[]>([])
+  const [facultyMajorMap, setFacultyMajorMap] = useState<Record<string, string[]>>({})
   const [yearLevels, setYearLevels] = useState<number[]>([])
 
   const [rows, setRows] = useState<AssessmentListRow[]>([])
@@ -68,11 +69,13 @@ export default function AdminSearchPage() {
       ok?: boolean
       faculties?: string[]
       majors?: string[]
+      facultyMajorMap?: Record<string, string[]>
       years?: number[]
     }
     if (res.ok && json.ok) {
       setFaculties(json.faculties ?? [])
       setMajors(json.majors ?? [])
+      setFacultyMajorMap(json.facultyMajorMap ?? {})
       setYearLevels(json.years ?? [])
     }
   }, [navigate])
@@ -283,12 +286,12 @@ export default function AdminSearchPage() {
       <section className="aj-searchPanel">
         <div className="aj-searchGrid">
           <label className="aj-searchField">
-            <span>รหัสนักศึกษา</span>
+            <span>รหัส หรือ ชื่อนักศึกษา</span>
             <input
               type="text"
               value={studentQ}
-              onChange={(e) => setStudentQ(e.target.value.replace(/\D/g, ''))}
-              placeholder="ค้นหารหัส"
+              onChange={(e) => setStudentQ(e.target.value)}
+              placeholder="ค้นหารหัส หรือ ชื่อ..."
               className="aj-searchInput"
             />
           </label>
@@ -319,7 +322,10 @@ export default function AdminSearchPage() {
             <select
               className="aj-searchSelect"
               value={faculty}
-              onChange={(e) => setFaculty(e.target.value)}
+              onChange={(e) => {
+                setFaculty(e.target.value)
+                setMajor('') // Reset major when faculty changes
+              }}
             >
               <option value="">ทั้งหมด</option>
               {faculties.map((f) => (
@@ -330,14 +336,14 @@ export default function AdminSearchPage() {
             </select>
           </label>
           <label className="aj-searchField">
-            <span>สาขา</span>
+            <span>สาขาวิชา</span>
             <select
               className="aj-searchSelect"
               value={major}
               onChange={(e) => setMajor(e.target.value)}
             >
               <option value="">ทั้งหมด</option>
-              {majors.map((m) => (
+              {(faculty ? facultyMajorMap[faculty] || [] : majors).map((m) => (
                 <option key={m} value={m}>
                   {m}
                 </option>
