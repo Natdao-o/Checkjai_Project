@@ -7,8 +7,23 @@ export default function BubbleLetterWritePage() {
   const navigate = useNavigate()
   const [text, setText] = useState('')
 
-  const handleRelease = () => {
-    // ห้ามทำการบันทึกข้อมูลลงฐานข้อมูล (Supabase) ตามเงื่อนไขความเป็นส่วนตัว
+  const handleRelease = async () => {
+    if (!text.trim()) {
+      navigate('/bubble-letter/comfort')
+      return
+    }
+
+    try {
+      const studentId = sessionStorage.getItem('checkjai_student_id') || undefined
+      await fetch('/api/bubble-letters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text, student_id: studentId }),
+      })
+    } catch (err) {
+      console.error('Failed to save bubble letter:', err)
+    }
+    
     navigate('/bubble-letter/comfort')
   }
 
@@ -22,7 +37,10 @@ export default function BubbleLetterWritePage() {
           {/* Header section with vertical pink bar */}
           <div className="flex items-center gap-4 px-8 py-8">
             <div className="w-1.5 h-10 bg-[#d44b7d] rounded-full"></div>
-            <h1 className="text-2xl md:text-3xl font-bold text-[#5b2b3b]">พื้นที่ระบายความรู้สึก</h1>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-[#5b2b3b]">พื้นที่ระบายความรู้สึก</h1>
+              <p className="text-[#5b2b3b]/60 text-sm mt-1">* ระบบจะทำการบันทึกข้อความหลังทำการส่ง</p>
+            </div>
           </div>
 
           {/* Textarea Area */}

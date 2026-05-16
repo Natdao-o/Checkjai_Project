@@ -47,7 +47,12 @@ export default function AdminDashboardPage() {
       ])
       const sJson = await sRes.json()
       const mJson = await mRes.json()
-      if (sJson.ok) setSemesters(sJson.semesters)
+      if (sJson.ok) {
+        setSemesters(sJson.semesters)
+        if (!semesterId && sJson.semesters.length > 0) {
+          setSemesterId(sJson.semesters[0].id)
+        }
+      }
       if (mJson.ok) setFaculties(mJson.faculties)
     } catch (e) {}
   }
@@ -81,7 +86,9 @@ export default function AdminDashboardPage() {
       return
     }
     void loadMeta()
-    void loadStats()
+    if (semesterId) {
+      void loadStats()
+    }
   }, [navigate, semesterId, faculty])
 
   return (
@@ -96,10 +103,10 @@ export default function AdminDashboardPage() {
           <label className="aj-searchField">
             <span>เลือกปีการศึกษา / เทอม</span>
             <select value={semesterId} onChange={(e) => setSemesterId(e.target.value)} className="aj-searchSelect">
-              <option value="">ทั้งหมด</option>
-              <option value="current">ปัจจุบัน</option>
-              {semesters.map(s => (
-                <option key={s.id} value={s.id}>{s.semester_name}/{s.academic_year}</option>
+              {semesters.map((s, idx) => (
+                <option key={s.id} value={s.id}>
+                  {s.semester_name}/{s.academic_year} {idx === 0 ? '(Latest)' : ''}
+                </option>
               ))}
             </select>
           </label>

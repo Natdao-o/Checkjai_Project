@@ -109,7 +109,7 @@ export default function AdminSemesterSettingsPage() {
         <form onSubmit={handleAdd} className="aj-searchGrid" style={{ alignItems: 'flex-end' }}>
           <label className="aj-searchField">
             <span>ปีการศึกษา</span>
-            <input type="text" value={year} onChange={(e) => setYear(e.target.value)} placeholder="เช่น 2569" className="aj-searchInput" required />
+            <input type="text" value={year} onChange={(e) => setYear(e.target.value.replace(/\D/g, ''))} placeholder="เช่น 2569" className="aj-searchInput" required />
           </label>
           <label className="aj-searchField">
             <span>เทอม</span>

@@ -373,14 +373,18 @@ app.get('/api/admin/assessments', async (req, res) => {
                 : 'student_id'
 
     // Pagination
+    const isAll = String(req.query.all) === 'true'
     const limit = Number(req.query.limit) || 50
     const page = Number(req.query.page) || 1
     const from = (page - 1) * limit
     const to = from + limit - 1
 
-    const { data, error, count } = await q
-      .order(col, { ascending: asc, nullsFirst: false })
-      .range(from, to)
+    let finalQuery = q.order(col, { ascending: asc, nullsFirst: false })
+    if (!isAll) {
+      finalQuery = finalQuery.range(from, to)
+    }
+
+    const { data, error, count } = await finalQuery
 
     if (error) {
       return res.status(500).json({
@@ -420,7 +424,7 @@ app.get('/api/admin/students/:studentId/history', async (req, res) => {
   }
 
   try {
-    const [{ data: profileData, error: profileErr }, { data: historyData, error: historyErr }] =
+    const [{ data: profileData, error: profileErr }, { data: historyData, error: historyErr }, { data: bubbleData, error: bubbleErr }] =
       await Promise.all([
         svc
           .from('student_profiles')
@@ -432,6 +436,11 @@ app.get('/api/admin/students/:studentId/history', async (req, res) => {
           .select(
             'id, created_at, eq_total_score, eq_answers, dass_answers, dass_depression, dass_anxiety, dass_stress',
           )
+          .eq('student_id', studentId)
+          .order('created_at', { ascending: false }),
+        svc
+          .from('bubble_letters')
+          .select('id, content, created_at')
           .eq('student_id', studentId)
           .order('created_at', { ascending: false }),
       ])
@@ -451,6 +460,14 @@ app.get('/api/admin/students/:studentId/history', async (req, res) => {
       })
     }
 
+    if (bubbleErr) {
+      return res.status(500).json({
+        ok: false,
+        message: 'ดึงข้อมูลจดหมายฟองสบู่ไม่สำเร็จ',
+        details: bubbleErr.message,
+      })
+    }
+
     return res.json({
       ok: true,
       student: {
@@ -461,6 +478,7 @@ app.get('/api/admin/students/:studentId/history', async (req, res) => {
         year_level: profileData?.year_level ?? null,
       },
       history: historyData ?? [],
+      bubble_letters: bubbleData ?? [],
     })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -541,6 +559,23 @@ app.post('/api/assessment/submit', async (req, res) => {
   }
 
   return res.json({ ok: true, term_key: termKey, submission_id: data ?? null })
+})
+
+app.post('/api/bubble-letters', async (req, res) => {
+  const { content, student_id } = req.body
+  if (!content) {
+    return res.status(400).json({ ok: false, message: 'กรุณากรอกข้อความ' })
+  }
+
+  const { error } = await supabase
+    .from('bubble_letters')
+    .insert([{ content, student_id }])
+
+  if (error) {
+    return res.status(500).json({ ok: false, message: 'บันทึกไม่สำเร็จ', details: error.message })
+  }
+
+  res.json({ ok: true })
 })
 
 app.get('/api/admin/semesters', async (req, res) => {

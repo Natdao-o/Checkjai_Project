@@ -31,3 +31,9 @@ export type StudentHistoryRow = {
   dass_anxiety?: { raw?: number; doubled?: number; labelTh?: string } | null
   dass_stress?: { raw?: number; doubled?: number; labelTh?: string } | null
 }
+
+export type BubbleLetterRow = {
+  id: string
+  content: string
+  created_at: string
+}

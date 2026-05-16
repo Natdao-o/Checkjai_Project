@@ -43,9 +43,10 @@ export default function AdminSearchPage() {
   const [rows, setRows] = useState<AssessmentListRow[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [page, setPage] = useState(1)
-  const limit = 50
+  const limit = 20
 
   const [loading, setLoading] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [configError, setConfigError] = useState<string | null>(null)
 
@@ -217,6 +218,28 @@ export default function AdminSearchPage() {
     navigate(`/admin/search/${encodeURIComponent(sid)}/history`)
   }
 
+  async function handleExportAll() {
+    setExporting(true)
+    try {
+      const qs = buildQuery()
+      // Force all=true and remove page/limit if needed, though API now handles all=true
+      const exportQs = new URLSearchParams(qs)
+      exportQs.set('all', 'true')
+      
+      const res = await adminFetch(`/api/admin/assessments?${exportQs.toString()}`)
+      const json = await res.json()
+      if (res.ok && json.ok) {
+        downloadAssessmentsCsv(json.rows ?? [], new Set())
+      } else {
+        alert(json.message ?? 'Export ไม่สำเร็จ')
+      }
+    } catch {
+      alert('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="aj-searchPage aj-admin-theme">
       <header className="aj-searchHeader">
@@ -335,9 +358,19 @@ export default function AdminSearchPage() {
             type="button"
             className="aj-searchBtnExport"
             onClick={() => downloadAssessmentsCsv(rows, selected)}
-            disabled={rows.length === 0}
+            disabled={rows.length === 0 || selected.size === 0}
+            style={{ marginRight: '8px' }}
           >
-            Export
+            Export รายการที่เลือก ({selected.size})
+          </button>
+          <button
+            type="button"
+            className="aj-searchBtnExport"
+            style={{ background: '#10b981', color: 'white' }}
+            onClick={handleExportAll}
+            disabled={totalCount === 0 || exporting}
+          >
+            {exporting ? 'กำลังส่งออก...' : `Export ทั้งหมดที่ค้นพบ (${totalCount})`}
           </button>
         </div>
 

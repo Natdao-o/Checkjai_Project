@@ -12,11 +12,23 @@ type ApiResponse = {
   history?: StudentHistoryRow[]
 }
 
+import { utils, writeFile } from 'xlsx'
+
 function formatMonthYearTh(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleDateString('th-TH', {
     month: 'short',
+    year: 'numeric',
+  })
+}
+
+function formatFullDateTh(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('th-TH', {
+    day: 'numeric',
+    month: 'long',
     year: 'numeric',
   })
 }
@@ -119,24 +131,85 @@ export default function AdminStudentHistoryDetailPage() {
     })
     .join(' ')
 
+  const handleExportExcel = () => {
+    if (!selected) return
+
+    const wb = utils.book_new()
+
+    // 1. Sheet "Summary"
+    const summaryData = [
+      ['ข้อมูลนักศึกษา'],
+      ['รหัสนักศึกษา', student?.student_id ?? studentId],
+      ['ชื่อ-นามสกุล', student?.full_name ?? '-'],
+      ['คณะ', student?.faculty?.trim() || '-'],
+      ['สาขา', student?.major?.trim() || '-'],
+      ['ชั้นปี', student?.year_level ?? '-'],
+      ['วันที่ทำแบบทดสอบ', formatFullDateTh(selected.created_at)],
+      [''],
+      ['สรุปผลคะแนน'],
+      ['DASS-21 - ซึมเศร้า', `${selected.dass_depression?.doubled ?? 0} (${selected.dass_depression?.labelTh ?? '-'})`],
+      ['DASS-21 - วิตกกังวล', `${selected.dass_anxiety?.doubled ?? 0} (${selected.dass_anxiety?.labelTh ?? '-'})`],
+      ['DASS-21 - ความเครียด', `${selected.dass_stress?.doubled ?? 0} (${selected.dass_stress?.labelTh ?? '-'})`],
+      ['EQ รวม', `${selected.eq_total_score ?? 0} / 208`],
+      ['สุขภาพจิตใจรวม (Mental Wellbeing)', `${mentalAvg} / 100`],
+    ]
+    const wsSummary = utils.aoa_to_sheet(summaryData)
+    utils.book_append_sheet(wb, wsSummary, 'สรุปผล')
+
+    // 2. Sheet "Detailed Answers"
+    const detailsData = [
+      ['ข้อที่', 'หมวดหมู่', 'คำถาม', 'คะแนน', 'คำตอบ'],
+    ]
+
+    // DASS Answers
+    DASS21_QUESTIONS_TH.forEach((q, idx) => {
+      const score = dassAnswers[idx] ?? 0
+      const ans = typeof dassAnswers[idx] === 'number' ? DASS21_CHOICES_TH[dassAnswers[idx] ?? 0] : '-'
+      detailsData.push([idx + 1, 'DASS-21', q, score, ans])
+    })
+
+    // EQ Answers
+    EQ_QUESTIONS_TH.forEach((q, idx) => {
+      const score = eqAnswers[idx] ?? 0
+      const ans = typeof eqAnswers[idx] === 'number' ? EQ_CHOICES_TH[eqAnswers[idx] ?? 0] : '-'
+      detailsData.push([idx + 1, 'EQ', q, score, ans])
+    })
+
+    const wsDetails = utils.aoa_to_sheet(detailsData)
+    utils.book_append_sheet(wb, wsDetails, 'คำตอบโดยละเอียด')
+
+    // Download
+    const fileName = `Assessment_${studentId}_${selected.created_at.split('T')[0]}.xlsx`
+    writeFile(wb, fileName)
+  }
+
   return (
     <div className="aj-historyPage">
-      <header className="aj-searchHeader">
-        <h1 className="aj-searchTitle">Search</h1>
-        <p className="aj-searchCrumb">
-          <button type="button" className="aj-searchCrumbLink" onClick={() => navigate('/admin/search')}>
-            Search
-          </button>
-          {' > '}
-          <button
-            type="button"
-            className="aj-searchCrumbLink"
-            onClick={() => navigate(`/admin/search/${encodeURIComponent(studentId)}/history`)}
-          >
-            History
-          </button>
-          {' > Detail'}
-        </p>
+      <header className="aj-searchHeader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div>
+          <h1 className="aj-searchTitle">Search</h1>
+          <p className="aj-searchCrumb">
+            <button type="button" className="aj-searchCrumbLink" onClick={() => navigate('/admin/search')}>
+              Search
+            </button>
+            {' > '}
+            <button
+              type="button"
+              className="aj-searchCrumbLink"
+              onClick={() => navigate(`/admin/search/${encodeURIComponent(studentId)}/history`)}
+            >
+              History
+            </button>
+            {' > Detail'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleExportExcel}
+          className="aj-searchBtnExport"
+        >
+          📊 Export Excel
+        </button>
       </header>
 
       {error ? <p className="aj-searchBanner">{error}</p> : null}

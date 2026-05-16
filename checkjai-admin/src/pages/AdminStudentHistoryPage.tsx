@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { adminFetch, clearTeacherSession, getTeacherToken } from '../lib/teacherSession'
-import type { StudentHistoryRow, StudentProfileLite } from '../types/assessmentAdmin'
+import type { StudentHistoryRow, StudentProfileLite, BubbleLetterRow } from '../types/assessmentAdmin'
 
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
+import { utils, writeFile } from 'xlsx'
 
 type ApiResponse = {
   ok?: boolean
   message?: string
   student?: StudentProfileLite
   history?: StudentHistoryRow[]
+  bubble_letters?: BubbleLetterRow[]
 }
 
 function formatDateTh(iso: string): string {
@@ -64,6 +66,7 @@ export default function AdminStudentHistoryPage() {
   const [error, setError] = useState<string | null>(null)
   const [student, setStudent] = useState<StudentProfileLite | null>(null)
   const [history, setHistory] = useState<StudentHistoryRow[]>([])
+  const [bubbleLetters, setBubbleLetters] = useState<BubbleLetterRow[]>([])
   const [metrics, setMetrics] = useState<RecordMetrics[]>([])
 
   useEffect(() => {
@@ -91,6 +94,7 @@ export default function AdminStudentHistoryPage() {
         setStudent(json.student ?? null)
         const rows = json.history ?? []
         setHistory(rows)
+        setBubbleLetters(json.bubble_letters ?? [])
         setMetrics(rows.map((r) => computeMetrics(r)))
       } catch {
         if (!cancelled) setError('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้')
@@ -103,16 +107,82 @@ export default function AdminStudentHistoryPage() {
     }
   }, [navigate, studentId])
 
+  const handleBulkExportExcel = () => {
+    const wb = utils.book_new()
+
+    // 1. Sheet: Profile
+    const profileData = [
+      ['ข้อมูลนักศึกษา'],
+      ['รหัสนักศึกษา', student?.student_id || studentId],
+      ['ชื่อ-นามสกุล', student?.full_name || '-'],
+      ['คณะ', student?.faculty?.trim() || '-'],
+      ['สาขา', student?.major?.trim() || '-'],
+      ['ชั้นปี', student?.year_level ?? '-'],
+      [''],
+      ['จำนวนการทำแบบทดสอบ', history.length],
+      ['จำนวนจดหมายฟองสบู่', bubbleLetters.length],
+      ['วันที่ส่งออกข้อมูล', new Date().toLocaleDateString('th-TH')],
+    ]
+    const wsProfile = utils.aoa_to_sheet(profileData)
+    utils.book_append_sheet(wb, wsProfile, 'ข้อมูลเบื้องต้น')
+
+    // 2. Sheet: Trends (Graph Data)
+    const trendHeader = [['วันที่ (ครั้งที่)', 'สุขภาพจิตใจ (%)', 'ความฉลาดทางอารมณ์ (%)', 'ภาพรวม (%)']]
+    const trendRows = metrics.map((m) => [m.dateLabel, m.mentalWellbeing, m.eqPercent, m.overall])
+    const wsTrend = utils.aoa_to_sheet([...trendHeader, ...trendRows])
+    utils.book_append_sheet(wb, wsTrend, 'แนวโน้มสุขภาพจิต')
+
+    // 3. Sheet: Assessment Records
+    const recordsHeader = [['วันที่', 'D (ซึมเศร้า)', 'ระดับ D', 'A (วิตกกังวล)', 'ระดับ A', 'S (เครียด)', 'ระดับ S', 'คะแนน EQ รวม']]
+    const recordsRows = history.map((h) => [
+      formatDateTh(h.created_at),
+      h.dass_depression?.doubled ?? 0,
+      h.dass_depression?.labelTh ?? '-',
+      h.dass_anxiety?.doubled ?? 0,
+      h.dass_anxiety?.labelTh ?? '-',
+      h.dass_stress?.doubled ?? 0,
+      h.dass_stress?.labelTh ?? '-',
+      h.eq_total_score ?? 0,
+    ])
+    const wsRecords = utils.aoa_to_sheet([...recordsHeader, ...recordsRows])
+    utils.book_append_sheet(wb, wsRecords, 'ประวัติแบบทดสอบ')
+
+    // 4. Sheet: Bubble Letters
+    const bubbleHeader = [['วันที่', 'ข้อความความในใจ']]
+    const bubbleRows = bubbleLetters.map((b) => [formatDateTh(b.created_at), b.content])
+    const wsBubble = utils.aoa_to_sheet([...bubbleHeader, ...bubbleRows])
+    utils.book_append_sheet(wb, wsBubble, 'จดหมายฟองสบู่')
+
+    // Auto-size columns (rough estimation)
+    const sheets = [wsProfile, wsTrend, wsRecords, wsBubble]
+    sheets.forEach(ws => {
+      ws['!cols'] = [{ wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }]
+    })
+    wsBubble['!cols'] = [{ wch: 20 }, { wch: 80 }] // Content column wider
+
+    const fileName = `FullHistory_${studentId}_${new Date().toISOString().split('T')[0]}.xlsx`
+    writeFile(wb, fileName)
+  }
+
   return (
     <div className="aj-historyPage aj-admin-theme">
-      <header className="aj-searchHeader">
-        <h1 className="aj-searchTitle">Student History</h1>
-        <p className="aj-searchCrumb">
-          <button type="button" className="aj-searchCrumbLink" onClick={() => navigate('/admin/search')}>
-            Search
-          </button>
-          {' > History'}
-        </p>
+      <header className="aj-searchHeader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div>
+          <h1 className="aj-searchTitle">Student History</h1>
+          <p className="aj-searchCrumb">
+            <button type="button" className="aj-searchCrumbLink" onClick={() => navigate('/admin/search')}>
+              Search
+            </button>
+            {' > History'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleBulkExportExcel}
+          className="aj-searchBtnExport"
+        >
+          📊 Export All Data
+        </button>
       </header>
 
       {error ? <p className="aj-searchBanner">{error}</p> : null}
@@ -280,6 +350,43 @@ export default function AdminStudentHistoryPage() {
                 </button>
               )
             })}
+          </div>
+        )}
+      </section>
+
+      {/* Bubble Letters Section */}
+      <section className="aj-searchPanel" style={{ marginTop: '24px' }}>
+        <h2 className="aj-historyHead" style={{ border: 'none', marginBottom: '16px' }}>
+          💌 จดหมายฟองสบู่ (ความในใจ)
+        </h2>
+        {loading ? (
+          <p className="aj-searchTdMuted">กำลังโหลด...</p>
+        ) : bubbleLetters.length === 0 ? (
+          <p className="aj-searchTdMuted">ยังไม่มีข้อความระบายความรู้สึก</p>
+        ) : (
+          <div className="aj-historyList">
+            {bubbleLetters.map((b) => (
+              <div
+                key={b.id}
+                className="aj-historyItem"
+                style={{ cursor: 'default', background: '#f8fafc', borderLeft: '4px solid #f472b6' }}
+              >
+                <p className="aj-historyItemTitle" style={{ color: '#db2777' }}>● ความในใจ</p>
+                <div style={{ 
+                  margin: '12px 0', 
+                  padding: '12px', 
+                  background: 'white', 
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  color: '#334155',
+                  lineHeight: '1.6',
+                  whiteSpace: 'pre-wrap'
+                }}>
+                  {b.content}
+                </div>
+                <p className="aj-historyItemDate">{formatDateTh(b.created_at)}</p>
+              </div>
+            ))}
           </div>
         )}
       </section>

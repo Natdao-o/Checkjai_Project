@@ -30,10 +30,10 @@ export default function CategoriesPage() {
                   🦋 จดหมายฟองสบู่
                 </span>
                 <h2 className="text-2xl md:text-4xl font-bold text-[#5b2b3b] leading-tight">
-                  พื้นที่ระบายความรู้สึกของคุณ<br className="hidden md:block" /> โดยไม่เก็บข้อมูล
+                  จดหมายที่เต็มไปด้วยความรู้สึกที่หลากหลายของคุณ<br className="hidden md:block" /> ราวกับฟองสบู่
                 </h2>
                 <p className="text-[#5b2b3b]/80 text-lg leading-relaxed max-w-lg mx-auto md:mx-0">
-                  ปล่อยให้ความรู้สึกที่หนักอึ้งลอยไปกับฟองสบู่ เขียนทุกสิ่งที่คุณอยากระบาย แล้วมองมันค่อยๆ จางหายไปอย่างเป็นอิสระ
+                  ปล่อยให้ความรู้สึกที่หนักอึ้งเหมือนฟองสบู่ เขียนทุกสิ่งที่คุณอยากระบายหรือบอกเล่า เพื่อให้ใครสักคนได้รับฟัง แล้วมองมันค่อยๆจางหายไปอย่างอิสระ
                 </p>
                 <button
                   onClick={() => navigate('/bubble-letter/write')}
