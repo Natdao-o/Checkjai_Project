@@ -157,7 +157,7 @@ export default function AdminStudentHistoryDetailPage() {
     utils.book_append_sheet(wb, wsSummary, 'สรุปผล')
 
     // 2. Sheet "Detailed Answers"
-    const detailsData = [
+    const detailsData: any[][] = [
       ['ข้อที่', 'หมวดหมู่', 'คำถาม', 'คะแนน', 'คำตอบ'],
     ]
 
